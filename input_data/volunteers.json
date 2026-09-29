@@ -1,0 +1,82 @@
+{
+    "V001": {
+        "volunteer_id": "V001",
+        "vehicle_capacity": 30,
+        "location": "North Wing",
+        "availability": [480, 720],
+        "maximum_pickups": 3,
+        "pickup_counter": 0
+    },
+    "V002": {
+        "volunteer_id": "V002",
+        "vehicle_capacity": 50,
+        "location": "South Wing",
+        "availability": [540, 840],
+        "maximum_pickups": 5,
+        "pickup_counter": 0
+    },
+    "V003": {
+        "volunteer_id": "V003",
+        "vehicle_capacity": 25,
+        "location": "Center Wing",
+        "availability": [600, 900],
+        "maximum_pickups": 4,
+        "pickup_counter": 0
+    },
+    "V004": {
+        "volunteer_id": "V004",
+        "vehicle_capacity": 60,
+        "location": "North Wing",
+        "availability": [660, 960],
+        "maximum_pickups": 6,
+        "pickup_counter": 0
+    },
+    "V005": {
+        "volunteer_id": "V005",
+        "vehicle_capacity": 40,
+        "location": "South Wing",
+        "availability": [720, 1020],
+        "maximum_pickups": 4,
+        "pickup_counter": 0
+    },
+    "V006": {
+        "volunteer_id": "V006",
+        "vehicle_capacity": 35,
+        "location": "Center Wing",
+        "availability": [780, 1080],
+        "maximum_pickups": 5,
+        "pickup_counter": 0
+    },
+    "V007": {
+        "volunteer_id": "V007",
+        "vehicle_capacity": 70,
+        "location": "North Wing",
+        "availability": [840, 1140],
+        "maximum_pickups": 7,
+        "pickup_counter": 0
+    },
+    "V008": {
+        "volunteer_id": "V008",
+        "vehicle_capacity": 45,
+        "location": "South Wing",
+        "availability": [900, 1200],
+        "maximum_pickups": 4,
+        "pickup_counter": 0
+    },
+    "V009": {
+        "volunteer_id": "V009",
+        "vehicle_capacity": 20,
+        "location": "Center Wing",
+        "availability": [480, 960],
+        "maximum_pickups": 2,
+        "pickup_counter": 0
+    },
+    "V010": {
+        "volunteer_id": "V010",
+        "vehicle_capacity": 55,
+        "location": "North Wing",
+        "availability": [660, 1080],
+        "maximum_pickups": 5,
+        "pickup_counter": 0
+    }
+}

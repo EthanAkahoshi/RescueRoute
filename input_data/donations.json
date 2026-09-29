@@ -1,0 +1,92 @@
+{
+    "D001": {
+        "donation_id": "D001",
+        "donor_name": "Titan Dining Hall",
+        "food_type": "Prepared Meals",
+        "quantity": 25,
+        "expire_time": 660,
+        "location": "North Wing",
+        "ready_time": 480
+    },
+    "D002": {
+        "donation_id": "D002",
+        "donor_name": "Campus Cafe",
+        "food_type": "Baked Goods",
+        "quantity": 15,
+        "expire_time": 720,
+        "location": "South Wing",
+        "ready_time": 540
+    },
+    "D003": {
+        "donation_id": "D003",
+        "donor_name": "Student Pantry Surplus",
+        "food_type": "Canned Goods",
+        "quantity": 10,
+        "expire_time": 780,
+        "location": "Center Wing",
+        "ready_time": 600
+    },
+    "D004": {
+        "donation_id": "D004",
+        "donor_name": "Agri-Science Farm",
+        "food_type": "Fresh Produce",
+        "quantity": 30,
+        "expire_time": 840,
+        "location": "North Wing",
+        "ready_time": 660
+    },
+    "D005": {
+        "donation_id": "D005",
+        "donor_name": "Bookstore Convenience",
+        "food_type": "Canned Goods",
+        "quantity": 40,
+        "expire_time": 1020,
+        "location": "South Wing",
+        "ready_time": 720
+    },
+    "D006": {
+        "donation_id": "D006",
+        "donor_name": "Faculty Club",
+        "food_type": "Prepared Meals",
+        "quantity": 20,
+        "expire_time": 900,
+        "location": "Center Wing",
+        "ready_time": 780
+    },
+    "D007": {
+        "donation_id": "D007",
+        "donor_name": "Community Garden",
+        "food_type": "Fresh Produce",
+        "quantity": 35,
+        "expire_time": 960,
+        "location": "North Wing",
+        "ready_time": 780
+    },
+    "D008": {
+        "donation_id": "D008",
+        "donor_name": "Alumni Event Catering",
+        "food_type": "Prepared Meals",
+        "quantity": 45,
+        "expire_time": 960,
+        "location": "South Wing",
+        "ready_time": 840
+    },
+    "D009": {
+        "donation_id": "D009",
+        "donor_name": "Canned Food Drive",
+        "food_type": "Canned Goods",
+        "quantity": 50,
+        "expire_time": 1140,
+        "location": "Center Wing",
+        "ready_time": 900
+    },
+    "D010": {
+        "donation_id": "D010",
+        "donor_name": "Late Night Grill",
+        "food_type": "Baked Goods",
+        "quantity": 15,
+        "expire_time": 1080,
+        "location": "North Wing",
+        "ready_time": 960
+    }
+}
