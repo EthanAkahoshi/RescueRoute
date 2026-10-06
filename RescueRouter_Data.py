@@ -1,45 +1,46 @@
-# Data Format
-"""
-List -> Dict
-example:
-Donations = {
-    "D001": {
-        "donation_id": "D001",
-        "donor_name": "John Doe",
-        "food_type": "Canned Goods",
-        "quantity": 10,                 # to make it easier we'll go with "units" instead of pounds or kilograms
-        "expire_time": 720,             # in minutes -> 12:00 PM, this is relative to the ready time
-        "location": "Cafeteria",     
-        "ready_time": 380               # in minutes -> 6:20 AM, this is absolute time from midnight which is 0
-    },
-}
-
-Recipients = {
-    "R001":{
-        "recipient_id": "R001",
-        "organization_name": "Helping Hands",
-        "accepted_food_types": {"Canned Goods", "Fresh Produce"},
-        "capacity": 50,                                                 # units of food
-        "location": "Computer Science Building",
-        "closing_time": 1020                                            # in minutes, e.g., 1020 minutes = 5:00 PM absolute time from midnight which is 0
-    },
-}       
-
-Volunteers = {
-    "V001": {
-        "volunteer_id": "V001",
-        "vehicle_capacity": 50,                # in units of food
-        "location": "Cafeteria",     # initial location of the volunteer
-        "availability": [480, 1020],           # in minutes, e.g., 480 = 8:00 AM, 1020 = 5:00 PM
-        "maximum_pickups": 5,                  # maximum number of pickups the volunteer can handle
-        "pickup_counter": 0,                   # current number of pickups the volunteer has made
-    },
-}
-"""
-
+# RescueRouter Data Handling Module
+# This module provides functions to handle and check the compatibility and capacity of donations, recipients, and volunteers.
 #formats the txt data into python list dict system
-def load_donations(path):
-    return
+import json
+def load_json(filepath, required_fields):
+    valid_entries = {}
+
+    try:
+    # Open the JSON file and load contents
+    # with how hashmaps work duplicate keys will be overwritten. adding separate comparisons for duplicates is costly and will not be implemented
+        with open(filepath, 'r') as file:
+            data = json.load(file)
+
+    except FileNotFoundError:
+        print(f"File not found: {filepath}")
+        return valid_entries
+
+    # Iterate through each entry in JSON data
+    for key, entry in data.items():
+        is_valid = True
+
+        # Check if all required fields are present and not empty
+        for field in required_fields:
+            val = entry.get(field)
+
+            if val is None or val == "" or val == []:
+                print(f"Missing or empty required field '{field}' in entry with key '{key}'")
+                is_valid = False
+                break
+
+        if is_valid:
+            valid_entries[key] = entry
+
+    return valid_entries
+
+def load_all_data():
+    donations = load_json("./input_data/donations.json", ["donation_id", "donor_name", "food_type", "quantity", "expire_time", "location", "ready_time"])
+    recipients = load_json("./input_data/recipients.json", ["recipient_id", "organization_name", "accepted_food_types", "capacity", "location", "closing_time"])
+    volunteers = load_json("./input_data/volunteers.json", ["volunteer_id", "vehicle_capacity", "location", "availability", "maximum_pickups", "pickup_counter"])
+    
+    return donations, recipients, volunteers
+    #returning as a tuple so you can just do donations, recipients, volunteers = load_all_data()
+
 
 # compatibility checks [compares hard values like food type, capacity, and availability]
 def check_compatibility(donation, recipient, volunteer):
