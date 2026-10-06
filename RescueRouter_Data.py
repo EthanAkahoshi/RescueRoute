@@ -53,26 +53,24 @@ def check_compatibility(donation, recipient, volunteer):
     # if the donation is not ready before volunteer shift ends, reject
     if donation["food_type"] not in recipient["accepted_food_types"]:
         return False
-    if donation["quantity"] > recipient["capacity"]:
-        return False
     if not (donation["location"] == volunteer["location"] == recipient["location"]):
         return False
     if volunteer["pickup_counter"] >= volunteer["maximum_pickups"]:
         return False
-    if donation["expire_time"] <= 0:
-        return False
-    if donation["ready_time"] > volunteer["availability"][1]:
-        return False
+    
     #time logic
-    #if donation is ready after closing time of recipient, it's not compatible
-    #if donation expires before the volunteer can pick it up, it's not compatible
-    #if volunteer cannot initially pick it up but can pick it up before food expires -> check if vounteer min time is before closing time
+    if donation["expire_time"] <= volunteer["availability"][0]:
+        return False
+    
+    if donation["ready_time"] >= volunteer["availability"][1]:
+        return False
+    
     if donation["ready_time"] > recipient["closing_time"]:
         return False
-    if donation["ready_time"] + donation["expire_time"] < volunteer["availability"][0]:
+    
+    if volunteer["availability"][0] >= recipient["closing_time"]:
         return False
-    if volunteer["availability"][0] > recipient["closing_time"]:
-        return False
+    
     return True
 
 # capacity checks [compares the capacity of recipients and vehicle capacity of volunteers]
