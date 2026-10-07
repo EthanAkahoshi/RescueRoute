@@ -1,16 +1,22 @@
-from data import Donations, Recipients, Volunteers
-from Algo import check_time
+import os
 
-good = {"ready_time": 380, "expire_time": 720}
-bad  = {"ready_time": 400, "expire_time": 30}
-vol  = {"availability": [480, 1020]}
+from RescueRouter_Data import load_all_data
+from Algo import fifo_schedule
 
+# load_all_data uses paths like ./input_data/..., so run from this file's folder
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-rec = {"organization_name": "Helping Hands", "closing_time": 1020}
-vol = {"availability": [480, 1020]}
+donations, recipients, volunteers = load_all_data()
 
-print(check_time({"ready_time": 380,  "expire_time": 720}, rec, vol))   # A
-print(check_time({"ready_time": 400,  "expire_time": 30},  rec, vol))   # B
-print(check_time({"ready_time": 1080, "expire_time": 120}, rec, vol))   # C
-print(check_time({"ready_time": 900,  "expire_time": 300},
-                 {"organization_name": "Shelter", "closing_time": 850}, vol))  # D
+print("=== FIFO ===")
+results = fifo_schedule(donations, recipients, volunteers)
+
+for a in results:
+    print(f"[{a.status}] {a.reason}")
+
+assigned = [a for a in results if a.status == "assigned"]
+total_food = sum(donations[a.donation_id]["quantity"] for a in assigned)
+
+print()
+print(f"Assigned: {len(assigned)} / {len(results)} donations")
+print(f"Food delivered: {total_food} units")
