@@ -1,5 +1,5 @@
-{
-    "R001": {
+[
+    {
         "recipient_id": "R001",
         "organization_name": "Student Basic Needs Center",
         "accepted_food_types": ["Canned Goods", "Fresh Produce"],
@@ -7,7 +7,7 @@
         "location": "Center Wing",
         "closing_time": 1020
     },
-    "R002": {
+    {
         "recipient_id": "R002",
         "organization_name": "Campus Food Bank",
         "accepted_food_types": ["Prepared Meals", "Baked Goods"],
@@ -15,7 +15,7 @@
         "location": "North Wing",
         "closing_time": 960
     },
-    "R003": {
+    {
         "recipient_id": "R003",
         "organization_name": "Community Relief Shelter",
         "accepted_food_types": ["Prepared Meals", "Canned Goods"],
@@ -23,7 +23,7 @@
         "location": "South Wing",
         "closing_time": 1140
     },
-    "R004": {
+    {
         "recipient_id": "R004",
         "organization_name": "Veterans Resource Center",
         "accepted_food_types": ["Prepared Meals", "Fresh Produce"],
@@ -31,7 +31,7 @@
         "location": "Center Wing",
         "closing_time": 900
     },
-    "R005": {
+    {
         "recipient_id": "R005",
         "organization_name": "Local High School Pantry",
         "accepted_food_types": ["Baked Goods", "Canned Goods"],
@@ -39,7 +39,7 @@
         "location": "North Wing",
         "closing_time": 960
     },
-    "R006": {
+    {
         "recipient_id": "R006",
         "organization_name": "After School Program",
         "accepted_food_types": ["Baked Goods", "Fresh Produce"],
@@ -47,7 +47,7 @@
         "location": "South Wing",
         "closing_time": 1080
     },
-    "R007": {
+    {
         "recipient_id": "R007",
         "organization_name": "Housing Initiative",
         "accepted_food_types": ["Prepared Meals", "Canned Goods"],
@@ -55,7 +55,7 @@
         "location": "Center Wing",
         "closing_time": 1200
     },
-    "R008": {
+    {
         "recipient_id": "R008",
         "organization_name": "Senior Citizens Center",
         "accepted_food_types": ["Prepared Meals", "Fresh Produce"],
@@ -63,7 +63,7 @@
         "location": "North Wing",
         "closing_time": 900
     },
-    "R009": {
+    {
         "recipient_id": "R009",
         "organization_name": "Night Owl Study Pantry",
         "accepted_food_types": ["Baked Goods", "Canned Goods"],
@@ -71,7 +71,7 @@
         "location": "South Wing",
         "closing_time": 1380
     },
-    "R010": {
+    {
         "recipient_id": "R010",
         "organization_name": "Family Outreach",
         "accepted_food_types": ["Fresh Produce", "Canned Goods"],
@@ -79,4 +79,4 @@
         "location": "Center Wing",
         "closing_time": 1020
     }
-}
+]

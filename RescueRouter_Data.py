@@ -4,6 +4,7 @@
 import json
 def _load_json(filepath, required_fields):
     valid_entries = {}
+    seen_ids = set()
 
     try:
     # Open the JSON file and load contents
@@ -16,8 +17,13 @@ def _load_json(filepath, required_fields):
         return valid_entries
 
     # Iterate through each entry in JSON data
-    for key, entry in data.items():
+    for entry in data:
         is_valid = True
+        key = entry.get(required_fields[0])
+
+        if key in seen_ids:
+            print(f"Duplicate entry with key '{key}' found")
+            continue
 
         # Check if all required fields are present and not empty
         for field in required_fields:
@@ -30,6 +36,7 @@ def _load_json(filepath, required_fields):
 
         if is_valid:
             valid_entries[key] = entry
+            seen_ids.add(key)
 
     return valid_entries
 
