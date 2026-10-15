@@ -2,7 +2,7 @@
 # This module provides functions to handle and check the compatibility and capacity of donations, recipients, and volunteers.
 #formats the txt data into python list dict system
 import json
-def load_json(filepath, required_fields):
+def _load_json(filepath, required_fields):
     valid_entries = {}
 
     try:
@@ -34,9 +34,9 @@ def load_json(filepath, required_fields):
     return valid_entries
 
 def load_all_data():
-    donations = load_json("./input_data/donations.json", ["donation_id", "donor_name", "food_type", "quantity", "expire_time", "location", "ready_time"])
-    recipients = load_json("./input_data/recipients.json", ["recipient_id", "organization_name", "accepted_food_types", "capacity", "location", "closing_time"])
-    volunteers = load_json("./input_data/volunteers.json", ["volunteer_id", "vehicle_capacity", "location", "availability", "maximum_pickups", "pickup_counter"])
+    donations = _load_json("./input_data/donations.json", ["donation_id", "donor_name", "food_type", "quantity", "expire_time", "location", "ready_time"])
+    recipients = _load_json("./input_data/recipients.json", ["recipient_id", "organization_name", "accepted_food_types", "capacity", "location", "closing_time"])
+    volunteers = _load_json("./input_data/volunteers.json", ["volunteer_id", "vehicle_capacity", "location", "availability", "maximum_pickups", "pickup_counter"])
     
     return donations, recipients, volunteers
     #returning as a tuple so you can just do donations, recipients, volunteers = load_all_data()
@@ -44,36 +44,36 @@ def load_all_data():
 
 # compatibility checks [compares hard values like food type, capacity, and availability]
 def check_compatibility(donation, recipient, volunteer):
-    # Hard checks
+    # HARD CHECKS
+
     # if the recipient cannot accept food type, reject
-    # if the recipient does not have enough capacity, reject
-    # if the donation is not at the same location as the volunteer and recipient, reject
-    # if the volunteer has reached their maximum number of pickups, reject
-    # if the donation has already expired, reject
-    # if the donation is not ready before volunteer shift ends, reject
     if donation["food_type"] not in recipient["accepted_food_types"]:
         return False
+    # if the donation is not at the same location as the volunteer and recipient, reject
     if not (donation["location"] == volunteer["location"] == recipient["location"]):
         return False
+    # if the volunteer has reached their maximum number of pickups, reject
     if volunteer["pickup_counter"] >= volunteer["maximum_pickups"]:
         return False
     
-    #time logic
-    if donation["expire_time"] <= volunteer["availability"][0]:
+    #TIME CHECKS
+
+    # if the donation has already expired, reject
+    if (donation["ready_time"] + donation["expire_time"]) <= volunteer["availability"][0]:
         return False
-    
+    # if the donation is not ready before volunteer shift ends, reject
     if donation["ready_time"] >= volunteer["availability"][1]:
         return False
-    
-    if donation["ready_time"] > recipient["closing_time"]:
+    # if the donation is not ready before recipient closing time, reject
+    if donation["ready_time"] >= recipient["closing_time"]:
         return False
-    
+    # if the volunteer shift starts after recipient closing time, reject
     if volunteer["availability"][0] >= recipient["closing_time"]:
         return False
     
     return True
 
-# capacity checks [compares the capacity of recipients and vehicle capacity of volunteers]
+# CAPACITY CHECKS [compares the capacity of recipients and vehicle capacity of volunteers]
 
 def check_capacity(donation, recipient, volunteer):
     if donation["quantity"] > recipient["capacity"]:
