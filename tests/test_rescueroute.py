@@ -9,7 +9,8 @@ from RescueRouter_Data import (
     check_capacity
 )
 
-from Algo import fifo_schedule, greedy_schedule
+from Algo import fifo_schedule, greedy_schedule, Assignment
+from metrics import compute_metrics, urgent_donation_ids
 
 
 class TestRescueRouteData(unittest.TestCase):
@@ -336,6 +337,82 @@ class TestRescueRouteData(unittest.TestCase):
 
     def test_greedy_empty_input(self):
         self.assertEqual(greedy_schedule([], [], []), [])
+
+
+class TestMetrics(unittest.TestCase):
+    # Hand-worked example: 4 donations, deadlines 700 / 800 / 900 / 1000.
+    # Urgent = earliest 25% = ceil(4 * 0.25) = 1 donation (D001).
+
+    def setUp(self):
+        def donation(d_id, qty, deadline):
+            return {"donation_id": d_id, "quantity": qty,
+                    "ready_time": 600, "expire_time": deadline - 600}
+
+        self.donations = [donation("D001", 10, 700), donation("D002", 20, 800),
+                          donation("D003", 30, 900), donation("D004", 40, 1000)]
+        self.recipients = [{"capacity": 50}, {"capacity": 50}]          # total 100
+        self.volunteers = [{"vehicle_capacity": 30}, {"vehicle_capacity": 50}]  # total 80
+
+    def results(self, assigned_ids):
+        return [Assignment(d["donation_id"], "R001", "V001", 600, "", "assigned")
+                if d["donation_id"] in assigned_ids else
+                Assignment(d["donation_id"], None, None, None, "", "unassigned")
+                for d in self.donations]
+
+    def test_metrics_hand_worked_example(self):
+        metrics = compute_metrics(self.results({"D001", "D003"}),
+                                  self.donations, self.recipients, self.volunteers)
+
+        self.assertEqual(metrics["donations_received"], 4)
+        self.assertEqual(metrics["donations_assigned"], 2)
+        self.assertEqual(metrics["donations_unassigned"], 2)
+        self.assertEqual(metrics["quantity_rescued"], 40)       # 10 + 30
+        self.assertEqual(metrics["quantity_at_risk"], 60)       # 20 + 40
+        self.assertEqual(metrics["urgent_donations"], 1)
+        self.assertAlmostEqual(metrics["urgent_rescue_rate"], 100.0)
+        self.assertAlmostEqual(metrics["recipient_capacity_utilization"], 40.0)  # 40 / 100
+        self.assertAlmostEqual(metrics["volunteer_capacity_utilization"], 50.0)  # 40 / 80
+
+    def test_urgent_donation_missed(self):
+        metrics = compute_metrics(self.results({"D002", "D003", "D004"}),
+                                  self.donations, self.recipients, self.volunteers)
+
+        self.assertEqual(metrics["urgent_assigned"], 0)
+        self.assertAlmostEqual(metrics["urgent_rescue_rate"], 0.0)
+
+    def test_urgent_includes_ties_at_cutoff(self):
+        self.donations[1]["expire_time"] = 100   # D002 now also expires at 700
+
+        self.assertEqual(urgent_donation_ids(self.donations), {"D001", "D002"})
+
+    def test_metrics_empty_input(self):
+        metrics = compute_metrics([], [], [], [])
+
+        self.assertEqual(metrics["donations_received"], 0)
+        self.assertEqual(metrics["quantity_rescued"], 0)
+        self.assertEqual(metrics["urgent_rescue_rate"], 0.0)
+        self.assertEqual(metrics["recipient_capacity_utilization"], 0.0)
+        self.assertEqual(metrics["volunteer_capacity_utilization"], 0.0)
+
+    def test_metrics_from_greedy_run(self):
+        # Real run: recipient fits only one of two donations; greedy saves the urgent one
+        donation = {"donor_name": "Titan Dining Hall", "food_type": "Canned Goods",
+                    "quantity": 20, "location": "Center Wing"}
+        relaxed = dict(donation, donation_id="D001", ready_time=600, expire_time=780)
+        urgent = dict(donation, donation_id="D002", ready_time=610, expire_time=60)
+        recipient = {"recipient_id": "R001", "organization_name": "Student Basic Needs Center",
+                     "accepted_food_types": ["Canned Goods"], "capacity": 30,
+                     "location": "Center Wing", "closing_time": 900}
+        volunteer = {"volunteer_id": "V001", "vehicle_capacity": 50, "location": "Center Wing",
+                     "availability": [540, 840], "maximum_pickups": 3, "pickup_counter": 0}
+        args = ([relaxed, urgent], [recipient], [volunteer])
+
+        fifo = compute_metrics(fifo_schedule(*args), *args)
+        greedy = compute_metrics(greedy_schedule(*args), *args)
+
+        self.assertAlmostEqual(fifo["urgent_rescue_rate"], 0.0)
+        self.assertAlmostEqual(greedy["urgent_rescue_rate"], 100.0)
+        self.assertEqual(fifo["quantity_rescued"], greedy["quantity_rescued"])
 
 
 if __name__ == "__main__":

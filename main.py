@@ -2,6 +2,7 @@ import os
 
 from RescueRouter_Data import load_all_data
 from Algo import fifo_schedule, greedy_schedule
+from metrics import compute_metrics, format_metrics
 
 # load_all_data uses paths like ./input_data/..., so run from this file's folder
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -16,14 +17,12 @@ def run(name, schedule):
     for a in results:
         print(f"[{a.status}] {a.reason}")
 
-    assigned = [a for a in results if a.status == "assigned"]
-    total_food = sum(donations[a.donation_id]["quantity"] for a in assigned)
-
+    metrics = compute_metrics(results, donations, recipients, volunteers)
     print()
-    print(f"Assigned: {len(assigned)} / {len(results)} donations")
-    print(f"Food delivered: {total_food} units")
+    print(format_metrics(metrics))
     print()
+    return metrics
 
 
-run("FIFO", fifo_schedule)
-run("Greedy (urgency-first)", greedy_schedule)
+fifo_metrics = run("FIFO", fifo_schedule)
+greedy_metrics = run("Greedy (urgency-first)", greedy_schedule)
