@@ -51,3 +51,16 @@ This command discovers and executes the available unit tests and displays their 
    - Improved project documentation by explaining the testing process, scheduling algorithms, and application limitations.
 
    - Assisted with debugging and verifying expected program behavior.
+
+* [Ethan Akahoshi] (Algorithm & Optimization Lead):
+   - Set up the GitHub repository and the initial donation and pickup-time logic (`deadline_of`, `check_time`).
+
+   - Implemented the FIFO baseline scheduler with explainable assignment and rejection messages, and connected it to the input data in `main.py`.
+
+   - Implemented the greedy urgency-first scheduler (`heapq` priority queue keyed on expiry deadline, quantity, and ready time), sharing FIFO's matching step so the two strategies differ only in processing order.
+
+   - Added deferral explanations showing which donation went ahead under the greedy rule and why.
+
+   - Wrote the greedy unit tests (priority ordering, FIFO vs. greedy producing different results, deferral/starvation, input not modified, empty input).
+
+   - Documented the greedy rule, its trade-offs, and the complexity analysis in this README.
