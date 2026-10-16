@@ -12,8 +12,26 @@ Before the scheduler prioritizes a donation, the system evaluates feasibility us
    * "ready_time", "closing_time", and volunteer "availability" uses absolute time as stated above.
    * "expire_time" is calculated relative to the ready time. (ex: expire time of 60 with ready time of 60 means ready at 1:00 AM and expires at 2:00 AM)
 
+## Automated Testing
+RescueRoute uses Python's built-in unittest framework to verify the correctness and reliability of its scheduling functionality.
+Unit tests are located in the tests directory, primarily within test_rescueroute.py.
+
+## Running the Unit Tests
+From the project's root directory, execute:
+python -m unittest discover -s tests -v
+This command discovers and executes the available unit tests and displays their results.
+
 
 ## Team Contributions
 * [Kihyun Won] (Data & Matching Lead): 
     - Built the Json data retriever with duplicate and missing data checks during initial data load as well as the comparison logic for feasability checks between entities.
     - Designed the data format for the various entities to be used in the program.
+
+* [Elias Zoreikat] (Product & Quality Lead):
+   - Developed automated unit tests to verify the functionality of the RescueRoute scheduling algorithms.
+
+   - Tested successful FIFO assignments, empty input scenarios, and assignment data accuracy.
+
+   - Improved project documentation by explaining the testing process, scheduling algorithms, and application limitations.
+
+   - Assisted with debugging and verifying expected program behavior.
