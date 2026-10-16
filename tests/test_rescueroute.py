@@ -9,7 +9,7 @@ from RescueRouter_Data import (
     check_capacity
 )
 
-from Algo import fifo_schedule
+from Algo import fifo_schedule, greedy_schedule
 
 
 class TestRescueRouteData(unittest.TestCase):
@@ -283,6 +283,59 @@ class TestRescueRouteData(unittest.TestCase):
         self.assertIn("Student Basic Needs Center", assignment.reason)
         self.assertIn("Canned Goods", assignment.reason)
         self.assertIn("capacity", assignment.reason.lower())
+
+
+    def test_greedy_orders_by_expiry_then_quantity(self):
+        late = dict(self.donation, donation_id="D001", ready_time=600, expire_time=300)
+        soon_small = dict(self.donation, donation_id="D002", ready_time=610,
+                          expire_time=90, quantity=5)
+        soon_big = dict(self.donation, donation_id="D003", ready_time=620,
+                        expire_time=80, quantity=10)  # same deadline as D002 (700)
+
+        results = greedy_schedule([late, soon_small, soon_big],
+                                  [self.recipient], [self.volunteer])
+
+        self.assertEqual([a.donation_id for a in results], ["D003", "D002", "D001"])
+
+    def test_fifo_and_greedy_differ(self):
+        # Recipient only has room for one of the two; D002 arrives later but expires first
+        relaxed = dict(self.donation, donation_id="D001", ready_time=600, expire_time=780)
+        urgent = dict(self.donation, donation_id="D002", ready_time=610, expire_time=60)
+        self.recipient["capacity"] = 30
+        self.volunteer["vehicle_capacity"] = 50
+
+        fifo = {a.donation_id: a for a in fifo_schedule(
+            [relaxed, urgent], [self.recipient], [self.volunteer])}
+        greedy = {a.donation_id: a for a in greedy_schedule(
+            [relaxed, urgent], [self.recipient], [self.volunteer])}
+
+        self.assertEqual(fifo["D001"].status, "assigned")
+        self.assertEqual(fifo["D002"].status, "unassigned")
+        self.assertEqual(greedy["D002"].status, "assigned")
+        self.assertEqual(greedy["D001"].status, "unassigned")
+
+    def test_greedy_explains_deferred_donation(self):
+        # Starvation case: the long-lasting D001 arrived first but is pushed behind D002
+        relaxed = dict(self.donation, donation_id="D001", ready_time=600, expire_time=780)
+        urgent = dict(self.donation, donation_id="D002", ready_time=610, expire_time=60)
+        self.recipient["capacity"] = 30
+
+        results = greedy_schedule([relaxed, urgent], [self.recipient], [self.volunteer])
+        deferred = results[1]
+
+        self.assertEqual(deferred.donation_id, "D001")
+        self.assertIn("deferred behind D002", deferred.reason)
+        self.assertNotIn("deferred", results[0].reason)
+
+    def test_greedy_does_not_modify_input(self):
+        greedy_schedule([self.donation], [self.recipient], [self.volunteer])
+
+        self.assertEqual(self.recipient["capacity"], 50)
+        self.assertEqual(self.volunteer["vehicle_capacity"], 40)
+        self.assertEqual(self.volunteer["pickup_counter"], 0)
+
+    def test_greedy_empty_input(self):
+        self.assertEqual(greedy_schedule([], [], []), [])
 
 
 if __name__ == "__main__":

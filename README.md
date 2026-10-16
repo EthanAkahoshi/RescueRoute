@@ -12,6 +12,22 @@ Before the scheduler prioritizes a donation, the system evaluates feasibility us
    * "ready_time", "closing_time", and volunteer "availability" uses absolute time as stated above.
    * "expire_time" is calculated relative to the ready time. (ex: expire time of 60 with ready time of 60 means ready at 1:00 AM and expires at 2:00 AM)
 
+## Scheduling Strategies
+Both strategies live in `Algo.py` and use the same matching step (first recipient that accepts the food, has room and is open; first volunteer with vehicle room, pickups left, and on shift before the food expires). They only differ in the **order** donations are handled, so the comparison is fair.
+
+### A. FIFO baseline (`fifo_schedule`)
+Donations are handled in arrival order (earliest `ready_time` first) using a `deque`.
+
+### B. Greedy urgency-first (`greedy_schedule`)
+**Greedy rule:** First schedule the donation with the earliest expiry deadline (`ready_time + expire_time`). If two donations expire at the same time, schedule the larger quantity first. If still tied, schedule the one with the earlier `ready_time`, then the one that arrived first.
+
+* Data structure: a `heapq` priority queue keyed by `(deadline, -quantity, ready_time, arrival_position)`.
+* What it optimizes locally: food closest to going bad gets first pick of recipient capacity and volunteers.
+* Trade-offs / where it fails: it does not look ahead, so an urgent donation can use up capacity that a later donation needed more (e.g. the only recipient accepting its food type). Long-lasting donations are repeatedly pushed back and can be starved of capacity when lots of urgent food arrives. Every deferred donation's explanation names the donation it was deferred behind and why.
+
+### Complexity
+Let D = donations, R = recipients, V = volunteers. Both strategies run in **O(D log D + D·(R + V))**: the D log D comes from sorting (FIFO) or the heap (greedy), and matching each donation scans the recipients and volunteers once.
+
 ## Automated Testing
 RescueRoute uses Python's built-in unittest framework to verify the correctness and reliability of its scheduling functionality.
 Unit tests are located in the tests directory, primarily within test_rescueroute.py.

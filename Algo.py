@@ -24,6 +24,7 @@ def check_time(donation, recipient, volunteer):
 
 # FIFO baseline
 
+import heapq
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
@@ -83,15 +84,97 @@ def fifo_schedule(donations, recipients, volunteers):
     results = []
     while queue:
         donation = queue.popleft()
-        results.append(_fifo_assign_one(donation, recipient_list, volunteer_list,
-                                        rec_capacity, rec_accepts, vol_capacity, vol_pickups))
+        results.append(_assign_one(donation, recipient_list, volunteer_list,
+                                   rec_capacity, rec_accepts, vol_capacity, vol_pickups))
     return results
 
 
-def _fifo_assign_one(donation, recipients, volunteers,
-                     rec_capacity, rec_accepts, vol_capacity, vol_pickups):
+# Greedy urgency-first
+
+def _greedy_key(donation, arrival):
+    # Smaller key = handled sooner:
+    #   1. earliest expiry deadline (ready_time + expire_time)
+    #   2. larger quantity (rescues more food when deadlines tie)
+    #   3. earlier ready time
+    #   4. arrival position (makes the order fully deterministic)
+    return (deadline_of(donation), -donation["quantity"], donation["ready_time"], arrival)
+
+
+def _priority_reason(first, second):
+    # Explains which part of the greedy rule put `first` ahead of `second`
+    f_id, s_id = first["donation_id"], second["donation_id"]
+    if deadline_of(first) != deadline_of(second):
+        return (f"{f_id} expires at {_fmt_time(deadline_of(first))}, before {s_id} "
+                f"expires at {_fmt_time(deadline_of(second))}")
+    if first["quantity"] != second["quantity"]:
+        return (f"both expire at {_fmt_time(deadline_of(first))} and {f_id} is larger "
+                f"({first['quantity']} vs {second['quantity']} units)")
+    return (f"both expire at {_fmt_time(deadline_of(first))} with the same quantity "
+            f"and {f_id} arrived first")
+
+
+def greedy_schedule(donations, recipients, volunteers):
+    """Greedy urgency-first.
+
+    Rule: handle the donation that expires soonest first (deadline = ready_time +
+    expire_time). If two expire at the same time, handle the larger quantity first.
+    If still tied, the one that was ready earlier goes first.
+
+    Each donation is then matched exactly like FIFO (first recipient / volunteer that
+    works), so the only difference between the two strategies is the order.
+
+    What it optimizes locally: the food closest to going bad gets first pick of the
+    recipient capacity and volunteers, instead of losing it to food that could wait.
+
+    Where it can fail: it doesn't look ahead. An urgent donation can use up a
+    recipient that a later donation needed more (e.g. the only one that accepts its
+    food type), and long-lasting donations keep getting pushed back, so they can be
+    starved of capacity if lots of urgent food keeps showing up.
+
+    It doesn't change the original data, so you can run FIFO on it after.
+
+    Returns a list with one Assignment for every donation, in the order handled.
+
+    Time: O(D log D + D * (R + V))
+    D log D is building / popping the heap, the rest is matching each donation.
+    """
+    donation_list = list(donations.values()) if isinstance(donations, dict) else list(donations)
+    recipient_list = list(recipients.values()) if isinstance(recipients, dict) else list(recipients)
+    volunteer_list = list(volunteers.values()) if isinstance(volunteers, dict) else list(volunteers)
+
+    rec_capacity = {r["recipient_id"]: r["capacity"] for r in recipient_list}
+    rec_accepts = {r["recipient_id"]: set(r["accepted_food_types"]) for r in recipient_list}
+    vol_capacity = {v["volunteer_id"]: v["vehicle_capacity"] for v in volunteer_list}
+    vol_pickups = {v["volunteer_id"]: v["pickup_counter"] for v in volunteer_list}
+
+    # Arrival order is the same order FIFO uses, so we can tell when greedy jumped
+    # a donation ahead of one that arrived before it
+    arrived = sorted(donation_list, key=lambda d: d["ready_time"])
+    heap = [(_greedy_key(d, i), i) for i, d in enumerate(arrived)]
+    heapq.heapify(heap)
+
+    results = []
+    latest = -1     # latest-arriving donation handled so far
+    while heap:
+        _, i = heapq.heappop(heap)
+        donation = arrived[i]
+        assignment = _assign_one(donation, recipient_list, volunteer_list,
+                                 rec_capacity, rec_accepts, vol_capacity, vol_pickups)
+
+        # If something that arrived after this donation was already handled, it got deferred
+        if latest > i:
+            ahead = arrived[latest]
+            assignment.reason += (f" It was deferred behind {ahead['donation_id']} under the "
+                                  f"urgency-first rule because {_priority_reason(ahead, donation)}.")
+        latest = max(latest, i)
+        results.append(assignment)
+    return results
+
+
+def _assign_one(donation, recipients, volunteers,
+                rec_capacity, rec_accepts, vol_capacity, vol_pickups):
     # Finds the first feasible (recipient, volunteer) pair for one donation in O(R + V)
-    # and updates the capacity / pickup state on success.
+    # and updates the capacity / pickup state on success. Shared by FIFO and greedy.
     d_id = donation["donation_id"]
     food = donation["food_type"]
     qty = donation["quantity"]
