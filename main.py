@@ -2,12 +2,17 @@ import os
 
 from RescueRouter_Data import load_all_data
 from Algo import fifo_schedule, greedy_schedule
+from validation import validate_all
 from metrics import compute_metrics, format_metrics, format_comparison, explain_comparison
 
 # load_all_data uses paths like ./input_data/..., so run from this file's folder
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-donations, recipients, volunteers = load_all_data()
+donations, recipients, volunteers, problems = validate_all(*load_all_data())
+for message in problems:
+    print(message)
+if problems:
+    print()
 
 
 def run(name, schedule):

@@ -15,9 +15,20 @@ def _load_json(filepath, required_fields):
     except FileNotFoundError:
         print(f"File not found: {filepath}")
         return valid_entries
+    except json.JSONDecodeError:
+        # blank or malformed file
+        print(f"File is empty or not valid JSON: {filepath}")
+        return valid_entries
+
+    if not isinstance(data, list):
+        print(f"File must contain a list of entries: {filepath}")
+        return valid_entries
 
     # Iterate through each entry in JSON data
     for entry in data:
+        if not isinstance(entry, dict):
+            print(f"Skipping entry that is not an object: {entry!r}")
+            continue
         is_valid = True
         key = entry.get(required_fields[0])
 
@@ -65,6 +76,9 @@ def check_compatibility(donation, recipient, volunteer):
     
     #TIME CHECKS
 
+    # if the donation is already expired when it becomes ready, reject
+    if donation["expire_time"] <= 0:
+        return False
     # if the donation has already expired, reject
     if (donation["ready_time"] + donation["expire_time"]) <= volunteer["availability"][0]:
         return False

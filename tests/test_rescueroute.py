@@ -5,11 +5,13 @@ import unittest
 
 from RescueRouter_Data import (
     _load_json as load_json,
+    load_all_data,
     check_compatibility,
     check_capacity
 )
 
 from Algo import fifo_schedule, greedy_schedule, Assignment
+from validation import validate_all
 from metrics import (compute_metrics, urgent_donation_ids, compare_metrics,
                      explain_comparison, format_comparison)
 
@@ -476,6 +478,135 @@ class TestComparison(unittest.TestCase):
         self.assertIn("FIFO", table.splitlines()[0])
         urgent_row = next(l for l in table.splitlines() if l.startswith("Urgent rescue rate"))
         self.assertEqual(urgent_row.split()[-3:], ["0.0", "100.0", "+100.0"])
+
+
+class TestValidation(unittest.TestCase):
+
+    def setUp(self):
+        self.donation = {"donation_id": "D001", "donor_name": "Titan Dining Hall",
+                         "food_type": "Canned Goods", "quantity": 20, "expire_time": 780,
+                         "location": "Center Wing", "ready_time": 600}
+        self.recipient = {"recipient_id": "R001",
+                          "organization_name": "Student Basic Needs Center",
+                          "accepted_food_types": ["Canned Goods", "Fresh Produce"],
+                          "capacity": 50, "location": "Center Wing", "closing_time": 900}
+        self.volunteer = {"volunteer_id": "V001", "vehicle_capacity": 40,
+                          "location": "Center Wing", "availability": [540, 840],
+                          "maximum_pickups": 3, "pickup_counter": 0}
+
+    def validate(self):
+        return validate_all({"D001": self.donation}, {"R001": self.recipient},
+                            {"V001": self.volunteer})
+
+    def assert_rejected(self, entity, field, value):
+        original = entity[field]
+        entity[field] = value
+        donations, recipients, volunteers, messages = self.validate()
+        entity[field] = original
+
+        self.assertEqual(len(messages), 1, f"{field}={value!r} should be rejected")
+        self.assertIn(field, messages[0])
+        self.assertEqual(len(donations) + len(recipients) + len(volunteers), 2)
+
+    def test_valid_entries_pass(self):
+        donations, recipients, volunteers, messages = self.validate()
+
+        self.assertEqual(messages, [])
+        self.assertIn("D001", donations)
+        self.assertIn("R001", recipients)
+        self.assertIn("V001", volunteers)
+        self.assertEqual(recipients["R001"]["accepted_food_types"],
+                         {"Canned Goods", "Fresh Produce"})
+
+    def test_invalid_donation_values(self):
+        cases = [("quantity", 0), ("quantity", -5), ("quantity", "20"), ("quantity", True),
+                 ("expire_time", 0), ("expire_time", -100),
+                 ("ready_time", -1), ("ready_time", 2000), ("ready_time", 600.5),
+                 ("food_type", "canned goods"), ("food_type", "Pizza"), ("food_type", ["x"]),
+                 ("location", "Cafeteria"), ("donor_name", "   "), ("donation_id", 1)]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                self.assert_rejected(self.donation, field, value)
+
+    def test_invalid_recipient_values(self):
+        cases = [("capacity", -1), ("capacity", "50"), ("closing_time", 1500),
+                 ("location", "East Wing"), ("accepted_food_types", ["Pizza"]),
+                 ("accepted_food_types", "Canned Goods"), ("organization_name", "")]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                self.assert_rejected(self.recipient, field, value)
+
+    def test_invalid_volunteer_values(self):
+        cases = [("availability", [840, 540]), ("availability", [540, 540]),
+                 ("availability", [540]), ("availability", [540, 2000]),
+                 ("availability", ["9am", "5pm"]), ("vehicle_capacity", -10),
+                 ("maximum_pickups", -1), ("pickup_counter", "0"), ("location", None)]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                self.assert_rejected(self.volunteer, field, value)
+
+    def test_message_lists_every_problem(self):
+        self.donation["quantity"] = -5
+        self.donation["food_type"] = "Pizza"
+
+        messages = self.validate()[3]
+
+        self.assertIn("Donation D001 rejected", messages[0])
+        self.assertIn("quantity", messages[0])
+        self.assertIn("food_type", messages[0])
+
+    def test_validation_does_not_modify_input(self):
+        self.validate()
+
+        self.assertIsInstance(self.recipient["accepted_food_types"], list)
+
+    def test_sample_input_files_are_valid(self):
+        project_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        cwd = os.getcwd()
+        os.chdir(project_root)
+        try:
+            donations, recipients, volunteers, messages = validate_all(*load_all_data())
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(messages, [])
+        self.assertEqual((len(donations), len(recipients), len(volunteers)), (10, 10, 10))
+
+    def test_expired_donation_is_not_assigned(self):
+        # expire_time 0: already expired when ready, even with a volunteer on shift
+        self.donation["expire_time"] = 0
+
+        result = fifo_schedule([self.donation], [self.recipient], [self.volunteer])[0]
+
+        self.assertFalse(check_compatibility(self.donation, self.recipient, self.volunteer))
+        self.assertEqual(result.status, "unassigned")
+
+
+class TestLoaderBadFiles(unittest.TestCase):
+
+    def load(self, contents):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            filepath = os.path.join(temp_directory, "test.json")
+            with open(filepath, "w") as file:
+                file.write(contents)
+            return load_json(filepath, ["donation_id", "quantity"])
+
+    def test_blank_file(self):
+        self.assertEqual(self.load(""), {})
+
+    def test_empty_list_file(self):
+        self.assertEqual(self.load("[]"), {})
+
+    def test_malformed_json(self):
+        self.assertEqual(self.load('[{"donation_id": "D001",'), {})
+
+    def test_file_with_object_instead_of_list(self):
+        self.assertEqual(self.load('{"donation_id": "D001", "quantity": 5}'), {})
+
+    def test_non_object_entries_are_skipped(self):
+        result = self.load('["D001", 5, {"donation_id": "D002", "quantity": 5}]')
+
+        self.assertEqual(list(result), ["D002"])
 
 
 if __name__ == "__main__":
