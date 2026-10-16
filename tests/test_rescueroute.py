@@ -4,10 +4,12 @@ import tempfile
 import unittest
 
 from RescueRouter_Data import (
-    load_json,
+    _load_json as load_json,
     check_compatibility,
     check_capacity
 )
+
+from Algo import fifo_schedule
 
 
 class TestRescueRouteData(unittest.TestCase):
@@ -88,7 +90,7 @@ class TestRescueRouteData(unittest.TestCase):
 
     def test_donation_expires_before_volunteer_available(self):
         self.donation["ready_time"] = 500
-        self.donation["expire_time"] = 520
+        self.donation["expire_time"] = 20
 
         result = check_compatibility(
             self.donation,
@@ -141,12 +143,12 @@ class TestRescueRouteData(unittest.TestCase):
         self.assertFalse(result)
 
     def test_load_json_valid_entry(self):
-        test_data = {
-            "D001": {
+        test_data = [
+            {
                 "donation_id": "D001",
                 "quantity": 20
             }
-        }
+        ]
 
         with tempfile.TemporaryDirectory() as temp_directory:
             filepath = os.path.join(temp_directory, "test.json")
@@ -162,15 +164,15 @@ class TestRescueRouteData(unittest.TestCase):
             self.assertIn("D001", result)
 
     def test_load_json_missing_required_field(self):
-        test_data = {
-            "D001": {
+        test_data = [
+            {
                 "donation_id": "D001",
                 "quantity": 20
             },
-            "D002": {
+            {
                 "donation_id": "D002"
             }
-        }
+        ]
 
         with tempfile.TemporaryDirectory() as temp_directory:
             filepath = os.path.join(temp_directory, "test.json")
@@ -193,6 +195,94 @@ class TestRescueRouteData(unittest.TestCase):
         )
 
         self.assertEqual(result, {})
+
+    def test_duplicate_donation_id(self):
+        test_data = [
+            {
+                "donation_id": "D001",
+                "quantity": 20
+            },
+            {
+                "donation_id": "D001",
+                "quantity": 30
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_directory:
+            filepath = os.path.join(temp_directory, "test.json")
+
+            with open(filepath, "w") as file:
+                json.dump(test_data, file)
+
+            result = load_json(
+                filepath,
+                ["donation_id", "quantity"]
+            )
+
+            self.assertEqual(len(result), 1)
+            self.assertIn("D001", result)
+            self.assertEqual(result["D001"]["quantity"], 20)
+    
+    def test_two_donations_competing_for_capacity(self):
+        first_donation = self.donation.copy()
+
+        second_donation = self.donation.copy()
+        second_donation["donation_id"] = "D002"
+        second_donation["ready_time"] = 610
+
+        self.recipient["capacity"] = 30
+        self.volunteer["vehicle_capacity"] = 50
+
+        results = fifo_schedule(
+            [first_donation, second_donation],
+            [self.recipient],
+            [self.volunteer]
+        )
+
+        self.assertEqual(len(results), 2)
+
+        self.assertEqual(results[0].donation_id, "D001")
+        self.assertEqual(results[0].status, "assigned")
+        self.assertEqual(results[0].recipient_id, "R001")
+
+        self.assertEqual(results[1].donation_id, "D002")
+        self.assertEqual(results[1].status, "unassigned")
+        self.assertIsNone(results[1].recipient_id)
+        self.assertIn("remaining capacity", results[1].reason.lower())
+
+        self.assertEqual(self.recipient["capacity"], 30)
+
+    
+    def test_empty_input_lists(self):
+        results = fifo_schedule(
+            [],
+            [],
+            []
+        )
+
+        self.assertEqual(results, [])
+
+        
+    def test_fifo_successful_assignment(self):
+        results = fifo_schedule(
+            [self.donation],
+            [self.recipient],
+            [self.volunteer]
+        )
+
+        self.assertEqual(len(results), 1)
+
+        assignment = results[0]
+
+        self.assertEqual(assignment.donation_id, "D001")
+        self.assertEqual(assignment.recipient_id, "R001")
+        self.assertEqual(assignment.volunteer_id, "V001")
+        self.assertEqual(assignment.status, "assigned")
+        self.assertEqual(assignment.scheduled_time, 600)
+
+        self.assertIn("Student Basic Needs Center", assignment.reason)
+        self.assertIn("Canned Goods", assignment.reason)
+        self.assertIn("capacity", assignment.reason.lower())
 
 
 if __name__ == "__main__":
