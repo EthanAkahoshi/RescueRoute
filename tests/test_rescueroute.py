@@ -10,7 +10,8 @@ from RescueRouter_Data import (
 )
 
 from Algo import fifo_schedule, greedy_schedule, Assignment
-from metrics import compute_metrics, urgent_donation_ids
+from metrics import (compute_metrics, urgent_donation_ids, compare_metrics,
+                     explain_comparison, format_comparison)
 
 
 class TestRescueRouteData(unittest.TestCase):
@@ -413,6 +414,68 @@ class TestMetrics(unittest.TestCase):
         self.assertAlmostEqual(fifo["urgent_rescue_rate"], 0.0)
         self.assertAlmostEqual(greedy["urgent_rescue_rate"], 100.0)
         self.assertEqual(fifo["quantity_rescued"], greedy["quantity_rescued"])
+
+
+class TestComparison(unittest.TestCase):
+    # Recipient fits only one of two donations. D001 arrives first, D002 expires first,
+    # so FIFO assigns D001 and greedy assigns D002.
+
+    def setUp(self):
+        donation = {"donor_name": "Titan Dining Hall", "food_type": "Canned Goods",
+                    "quantity": 20, "location": "Center Wing"}
+        self.donations = [dict(donation, donation_id="D001", ready_time=600, expire_time=780),
+                          dict(donation, donation_id="D002", ready_time=610, expire_time=60)]
+        self.recipients = [{"recipient_id": "R001",
+                            "organization_name": "Student Basic Needs Center",
+                            "accepted_food_types": ["Canned Goods"], "capacity": 30,
+                            "location": "Center Wing", "closing_time": 900}]
+        self.volunteers = [{"volunteer_id": "V001", "vehicle_capacity": 50,
+                            "location": "Center Wing", "availability": [540, 840],
+                            "maximum_pickups": 3, "pickup_counter": 0}]
+
+    def run_both(self):
+        args = (self.donations, self.recipients, self.volunteers)
+        fifo, greedy = fifo_schedule(*args), greedy_schedule(*args)
+        return fifo, greedy, compute_metrics(fifo, *args), compute_metrics(greedy, *args)
+
+    def test_compare_metrics_is_greedy_minus_fifo(self):
+        _, _, fifo_m, greedy_m = self.run_both()
+        diff = compare_metrics(fifo_m, greedy_m)
+
+        self.assertEqual(diff["donations_assigned"], 0)
+        self.assertEqual(diff["quantity_rescued"], 0)
+        self.assertAlmostEqual(diff["urgent_rescue_rate"], 100.0)
+
+    def test_explanation_names_changed_donations_and_why(self):
+        fifo, greedy, fifo_m, greedy_m = self.run_both()
+        lines = explain_comparison(fifo, greedy, fifo_m, greedy_m)
+        text = " ".join(lines)
+
+        self.assertIn("from 0.0% to 100.0%", lines[0])
+        gained = next(l for l in lines if l.startswith("D002"))
+        lost = next(l for l in lines if l.startswith("D001"))
+        self.assertIn("only under greedy", gained)
+        self.assertIn("remaining capacity", gained)       # FIFO's reason for rejecting D002
+        self.assertIn("only under FIFO", lost)
+        self.assertIn("deferred behind D002", lost)       # greedy's reason for rejecting D001
+        self.assertNotIn("same donations", text)
+
+    def test_explanation_when_outcomes_match(self):
+        self.recipients[0]["capacity"] = 100              # room for both, order doesn't matter
+        fifo, greedy, fifo_m, greedy_m = self.run_both()
+
+        lines = explain_comparison(fifo, greedy, fifo_m, greedy_m)
+
+        self.assertEqual(len(lines), 1)
+        self.assertIn("same donations", lines[0])
+
+    def test_format_comparison_table(self):
+        _, _, fifo_m, greedy_m = self.run_both()
+        table = format_comparison(fifo_m, greedy_m)
+
+        self.assertIn("FIFO", table.splitlines()[0])
+        urgent_row = next(l for l in table.splitlines() if l.startswith("Urgent rescue rate"))
+        self.assertEqual(urgent_row.split()[-3:], ["0.0", "100.0", "+100.0"])
 
 
 if __name__ == "__main__":
