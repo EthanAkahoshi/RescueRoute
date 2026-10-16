@@ -58,7 +58,7 @@
         "donor_name": "Community Garden",
         "food_type": "Fresh Produce",
         "quantity": 35,
-        "expire_time": 960,
+        "expire_time": 120,
         "location": "North Wing",
         "ready_time": 780
     },
