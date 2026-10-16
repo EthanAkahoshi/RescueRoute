@@ -1,11 +1,11 @@
 # RescueRoute
 
-RescueRoute is a command-line Python application that matches time-sensitive surplus food donations with compatible recipient organizations and volunteer drivers. It compares a **FIFO baseline** with a **greedy urgency-first strategy** on the same input data, explains every assignment, rejection, and deferral in plain English, and reports metrics for both strategies.
+RescueRoute is our CPSC 335 group project. It's a command-line Python program that takes surplus food donations and tries to match each one with a recipient organization (shelters, pantries, etc.) and a volunteer driver who can pick it up. We run two scheduling strategies on the same data, a FIFO baseline and a greedy "most urgent first" strategy, and compare how they do. The program also prints an explanation for every decision so you can see why each donation was or wasn't assigned.
 
-> **Disclaimer:** RescueRoute is an educational prototype for CPSC 335 that uses simulated data. It is not food-safety certified, clinically validated, approved for emergency operations, or ready for real-world operational deployment.
+**Note:** This is a school project that uses made-up data. It is not food-safety certified or meant to be used for real food pickups or emergencies.
 
-## Setup and Running
-Requirements: Python 3.8 or newer (developed on Python 3.14). Only the standard library is used, so there is nothing to install.
+## How to Run It
+You need Python 3.8 or newer (we used 3.14). Everything we used is in the standard library, so you don't have to install anything.
 
 ```
 git clone https://github.com/EthanAkahoshi/RescueRoute.git
@@ -13,15 +13,17 @@ cd RescueRoute
 python main.py
 ```
 
-`main.py` loads the files in `input_data/`, validates them, then prints for each strategy:
-1. one explanation per donation (`[assigned]` or `[unassigned]`, with deferrals noted under greedy),
-2. the metrics block,
+When you run `main.py` it loads the JSON files in `input_data/`, checks them for bad values, and then for FIFO and then greedy it prints:
+1. a line for every donation saying if it was assigned or not and why
+2. the metrics for that strategy
 
-and finally a FIFO vs. greedy comparison table followed by an explanation of what changed and why. To try other data, edit the JSON files in `input_data/`; invalid entries are reported and skipped.
+At the end it prints a table comparing FIFO and greedy, plus a few sentences explaining what was different between them. If you want to try your own data you can edit the JSON files. Anything invalid gets skipped and the program tells you why.
 
-Run the tests with `python -m unittest discover -s tests -v` (see [Running the Unit Tests](#running-the-unit-tests)).
+To run the tests: `python -m unittest discover -s tests -v` (more on this below).
 
-## Architecture
+## How the Code Is Organized
+This is the order the program runs in:
+
 ```
 input_data/*.json --> RescueRouter_Data.load_all_data   (parse JSON, drop missing fields / duplicate IDs)
                   --> validation.validate_all            (drop entries with invalid values)
@@ -31,38 +33,35 @@ input_data/*.json --> RescueRouter_Data.load_all_data   (parse JSON, drop missin
                   --> metrics.format_comparison / explain_comparison
 ```
 
-| File | Responsibility |
+| File | What it does |
 |---|---|
-| `main.py` | Entry point: runs the pipeline above and prints the results |
-| `RescueRouter_Data.py` | JSON loading, missing-field and duplicate-ID checks, `check_compatibility`, `check_capacity` |
-| `validation.py` | Value validation (types, ranges, known food types and locations) |
-| `Algo.py` | `Assignment` record, FIFO and greedy schedulers, shared matching step, explanations |
-| `metrics.py` | Metrics, FIFO vs. greedy comparison table, and comparison explanation |
-| `input_data/` | Sample donations, recipients, and volunteers (10 each, simulated) |
-| `tests/test_rescueroute.py` | Automated unit tests |
+| `main.py` | Runs everything above and prints the output |
+| `RescueRouter_Data.py` | Loads the JSON files, removes duplicates and missing fields, and has `check_compatibility` and `check_capacity` |
+| `validation.py` | Checks that the values make sense (numbers in range, real food types, real locations, etc.) |
+| `Algo.py` | The FIFO and greedy schedulers, the `Assignment` class, and the explanations |
+| `metrics.py` | Calculates the metrics and builds the FIFO vs. greedy comparison |
+| `input_data/` | Our sample data: 10 donations, 10 recipients, 10 volunteers (all made up) |
+| `tests/test_rescueroute.py` | Our unit tests |
 
 ## Data Model
-All times are **minutes from midnight** (480 = 8:00 AM). Quantities and capacities are in generic food **units**.
+All times are in minutes from midnight, so 480 means 8:00 AM. Quantities are just "units" of food to keep things simple.
 
 | Entity | Fields |
 |---|---|
-| Donation | `donation_id`, `donor_name`, `food_type`, `quantity`, `expire_time` (minutes after `ready_time` until it expires), `location` (pickup area), `ready_time` |
+| Donation | `donation_id`, `donor_name`, `food_type`, `quantity`, `expire_time` (how many minutes after `ready_time` it goes bad), `location`, `ready_time` |
 | Recipient | `recipient_id`, `organization_name`, `accepted_food_types`, `capacity`, `location`, `closing_time` |
-| Volunteer | `volunteer_id`, `vehicle_capacity`, `location`, `availability` (`[start, end]` shift), `maximum_pickups`, `pickup_counter` (pickups already made) |
-| Assignment | `donation_id`, `recipient_id`, `volunteer_id`, `scheduled_time` (pickup time), `reason` (explanation), `status` (`assigned` / `unassigned`) |
+| Volunteer | `volunteer_id`, `vehicle_capacity`, `location`, `availability` (`[start, end]` of their shift), `maximum_pickups`, `pickup_counter` |
+| Assignment | `donation_id`, `recipient_id`, `volunteer_id`, `scheduled_time` (pickup time), `reason`, `status` (`assigned` or `unassigned`) |
 
-Food types: Prepared Meals, Fresh Produce, Canned Goods, Baked Goods. Locations: North Wing, South Wing, Center Wing.
+The food types are Prepared Meals, Fresh Produce, Canned Goods, and Baked Goods. The locations are North Wing, South Wing, and Center Wing.
 
-| Need | Data structure | Why |
-|---|---|---|
-| Entities by ID | `dict` | O(1) lookup by ID |
-| Duplicate-ID detection | `set` | O(1) membership test while loading |
-| Accepted food types | `set` (converted during validation) | O(1) check of whether a recipient accepts a food type |
-| FIFO processing | `collections.deque` | Preserves arrival order, O(1) pop from the front |
-| Greedy pending donations | `heapq` priority queue | O(log D) to take the next most urgent donation |
-| Remaining capacity / pickups | `dict` keyed by ID | Updated per assignment without modifying the input data |
-| Assignment history | `list` of `Assignment` | Ordered audit trail of decisions |
-| Metrics | `dict` | Named aggregate values |
+Data structures we used and why:
+* **dict** for storing donations, recipients, and volunteers by ID, so looking one up is O(1)
+* **set** for catching duplicate IDs and for each recipient's accepted food types (O(1) to check if they take something)
+* **deque** for FIFO since it keeps arrival order and popping from the front is O(1)
+* **heapq** for greedy so we can always grab the most urgent donation in O(log D)
+* **dict** for keeping track of remaining capacity and pickup counts, so we never change the original data
+* **list** for the assignment history, and a **dict** for the metrics
 
 ## Data Architecture & Ingestion
 The system relies on JSON files (`donations.json`, `recipients.json`, `volunteers.json`) to simulate the operational environment. 
@@ -70,15 +69,14 @@ The system relies on JSON files (`donations.json`, `recipients.json`, `volunteer
 * Validation: "_load_json" function checks incoming data. It actively drops entries containing missing or empty fields (such as empty strings or null arrays) to prevent crashes and also checks for duplicates using a set.
 
 ## Validation
-After loading, `validation.validate_all` checks every value and drops any entry that breaks a rule, printing one message that lists every problem with that entry (e.g. `Donation D003 rejected: quantity must be a whole number of at least 1 (got -5)`).
+After the data is loaded, `validation.validate_all` goes through every entry and throws out anything with a bad value. It prints a message listing everything that was wrong with it, like `Donation D003 rejected: quantity must be a whole number of at least 1 (got -5)`.
 
-| Entity | Rules |
-|---|---|
-| Donation | ID and donor name are non-empty text; `food_type` and `location` are known values; `quantity` and `expire_time` are whole numbers of at least 1; `ready_time` is 0-1440 |
-| Recipient | ID and name are non-empty text; `accepted_food_types` is a non-empty list of known types; `capacity` is a whole number of at least 0; `location` is known; `closing_time` is 0-1440 |
-| Volunteer | ID is non-empty text; `vehicle_capacity`, `maximum_pickups`, and `pickup_counter` are whole numbers of at least 0; `location` is known; `availability` is `[start, end]` with 0 <= start < end <= 1440 |
+What it checks:
+* **Donations:** ID and donor name can't be blank, food type and location have to be ones we know, quantity and expire time have to be whole numbers of at least 1, and ready time has to be between 0 and 1440
+* **Recipients:** ID and name can't be blank, accepted food types has to be a non-empty list of real food types, capacity can't be negative, location has to be real, and closing time has to be between 0 and 1440
+* **Volunteers:** ID can't be blank, vehicle capacity / max pickups / pickup counter can't be negative, location has to be real, and availability has to be `[start, end]` where start comes before end and both are between 0 and 1440
 
-The loader also treats blank, malformed, or non-list JSON files as empty (with a message) instead of crashing.
+The loader also doesn't crash anymore if a JSON file is blank or broken. It just prints a message and treats it as empty.
 
 ## Matching Engine & Constraints
 Before the scheduler prioritizes a donation, the system evaluates feasibility using a boolean check. A match is only considered valid if it passes two constraint categories:
@@ -88,36 +86,40 @@ Before the scheduler prioritizes a donation, the system evaluates feasibility us
    * "expire_time" is calculated relative to the ready time. (ex: expire time of 60 with ready time of 60 means ready at 1:00 AM and expires at 2:00 AM)
 
 ## Scheduling Strategies
-Both strategies live in `Algo.py` and use the same matching step: for each donation they take the first recipient and volunteer pair that passes `check_compatibility` and `check_capacity` from `RescueRouter_Data.py`, using the remaining capacity and pickup counts at that moment. They only differ in the **order** donations are handled, so the comparison is fair.
+Both strategies are in `Algo.py`. They use the exact same matching step: for each donation, go through the recipients and volunteers and take the first pair that passes `check_compatibility` and `check_capacity` (using how much capacity is left at that point). The only thing that's different between them is the order the donations get handled in, so it's a fair comparison.
 
-### A. FIFO baseline (`fifo_schedule`)
-Donations are handled in arrival order (earliest `ready_time` first) using a `deque`.
+### A. FIFO (`fifo_schedule`)
+Handles donations in the order they arrive (earliest `ready_time` first) using a deque.
 
 ### B. Greedy urgency-first (`greedy_schedule`)
-**Greedy rule:** First schedule the donation with the earliest expiry deadline (`ready_time + expire_time`). If two donations expire at the same time, schedule the larger quantity first. If still tied, schedule the one with the earlier `ready_time`, then the one that arrived first.
+**Our greedy rule:** Schedule the donation with the earliest expiration deadline first (deadline = `ready_time + expire_time`). If two donations expire at the same time, do the bigger quantity first. If they're still tied, do the one with the earlier `ready_time`, and if that's tied too, the one that showed up first in the list.
 
-* Data structure: a `heapq` priority queue keyed by `(deadline, -quantity, ready_time, arrival_position)`.
-* What it optimizes locally: food closest to going bad gets first pick of recipient capacity and volunteers.
-* Trade-offs / where it fails: it does not look ahead, so an urgent donation can use up capacity that a later donation needed more (e.g. the only recipient accepting its food type). Long-lasting donations are repeatedly pushed back and can be starved of capacity when lots of urgent food arrives. Every deferred donation's explanation names the donation it was deferred behind and why.
+We use `heapq` with the key `(deadline, -quantity, ready_time, arrival_position)` to get this order.
+
+**What it optimizes locally:** the food that's about to go bad gets first pick of recipients and volunteers. We think this makes sense because food that lasts a long time can usually wait or go somewhere else, but urgent food is just gone if nobody takes it.
+
+**Where it can fail:** it doesn't look ahead. An urgent donation might take a spot that a later donation needed more (like if that recipient was the only one that accepts its food type). Also, donations that last a long time keep getting pushed back, so if a lot of urgent food shows up they might never get assigned. Whenever greedy pushes a donation back, the explanation says which donation went ahead of it and why.
 
 ### Complexity
-Let D = donations, R = recipients, V = volunteers. Both strategies run in **O(D log D + D·R·V)**: the D log D comes from sorting (FIFO) or the heap (greedy), and matching each donation tries every recipient / volunteer pair in the worst case (each pair check is O(1) once accepted food types are a set). Validation is O(D + R + V) and metrics are O(D log D + R + V), so scheduling dominates. For the sample data (D = R = V = 10) that is at most 1,000 pair checks per strategy.
+Let D = number of donations, R = recipients, V = volunteers.
+
+Both strategies are **O(D log D + D·R·V)**. The D log D part is from sorting (FIFO) or the heap (greedy). The D·R·V part is because for each donation, in the worst case we try every recipient/volunteer pair, and each check is O(1). Validation is O(D + R + V) and the metrics are O(D log D + R + V), so the scheduling is the slowest part. For our sample data (10 of each) that's at most 1,000 pair checks per strategy, which runs instantly.
 
 ## Metrics
-`metrics.compute_metrics` calculates the following for each strategy:
+`metrics.compute_metrics` calculates these for each strategy:
 
-| Metric | Definition |
+| Metric | How we calculate it |
 |---|---|
-| Donations received | Number of valid donation records processed |
-| Donations assigned / unassigned | Donations matched to a recipient and volunteer / left without a feasible match |
-| Food quantity rescued | Total quantity of assigned donations |
-| Food quantity at risk | Total quantity of unassigned donations |
-| Urgent rescue rate | Percentage of urgent donations that were assigned. **Urgent = the earliest-expiring 25% of donations by deadline** (`ready_time + expire_time`), rounded up, plus any donation tied with the last one. Set by `URGENT_FRACTION` in `metrics.py`. |
-| Recipient capacity utilization | Quantity rescued / total starting capacity of all recipients |
-| Volunteer capacity utilization | Quantity rescued / total starting vehicle capacity of all volunteers |
+| Donations received | Number of valid donations |
+| Donations assigned / unassigned | How many got matched / how many didn't |
+| Food quantity rescued | Total quantity of the assigned donations |
+| Food quantity at risk | Total quantity of the unassigned donations |
+| Urgent rescue rate | Percent of urgent donations that got assigned. We count the earliest-expiring 25% of donations as urgent (rounded up, plus any that tie with the last one). You can change this with `URGENT_FRACTION` in `metrics.py`. |
+| Recipient capacity utilization | Food rescued / total capacity of all recipients |
+| Volunteer capacity utilization | Food rescued / total vehicle capacity of all volunteers |
 
-## FIFO vs. Greedy Comparison
-Results on the sample data in `input_data/` (output of `python main.py`):
+## FIFO vs. Greedy Results
+This is what `python main.py` gives on our sample data:
 
 | Metric | FIFO | Greedy | Difference |
 |---|---|---|---|
@@ -125,28 +127,28 @@ Results on the sample data in `input_data/` (output of `python main.py`):
 | Donations unassigned | 3 | 3 | 0 |
 | Food quantity rescued | 185 | 190 | +5 |
 | Food quantity at risk | 100 | 95 | -5 |
-| Urgent rescue rate | 66.7% | 100.0% | +33.3 pts |
-| Recipient utilization | 30.8% | 31.7% | +0.8 pts |
-| Volunteer utilization | 43.0% | 44.2% | +1.2 pts |
+| Urgent rescue rate | 66.7% | 100.0% | +33.3 |
+| Recipient utilization | 30.8% | 31.7% | +0.8 |
+| Volunteer utilization | 43.0% | 44.2% | +1.2 |
 
-**What changed and why.** Both strategies use identical matching rules, so the only difference is processing order. D004 (30 units of fresh produce, expires 1:00 AM) and D007 (35 units of fresh produce, expires 3:00 PM) both need the only North Wing recipient that accepts produce, Senior Citizens Center, which has room for 45 units.
-* **FIFO** handles D004 first because it was ready earlier (11:00 AM vs. 1:00 PM). It takes 30 units of capacity, so D007, the most urgent donation in the data set, is rejected.
-* **Greedy** handles D007 first because it expires sooner, so D007 is rescued and D004 is rejected instead.
+**Why they're different:** It all comes down to D004 and D007. They're both fresh produce in North Wing, and the only North Wing recipient that takes produce is Senior Citizens Center, which only has room for 45 units. D004 is 30 units and D007 is 35, so only one of them fits.
+* **FIFO** does D004 first because it was ready earlier (11:00 AM vs 1:00 PM). That leaves only 15 units of space, so D007 gets rejected even though it's the most urgent donation in the whole data set (it expires at 3:00 PM).
+* **Greedy** does D007 first because it expires first. So D007 gets rescued and D004 gets rejected instead.
 
-Greedy therefore rescues the urgent donation (urgent rescue rate 66.7% to 100%) and 5 more units of food, with the same number of donations assigned. The other two unassigned donations fail under both strategies for reasons processing order cannot fix: D009 has no Center Wing volunteer with a large enough vehicle, and D010 has no volunteer on shift in time.
+That's why greedy has a 100% urgent rescue rate and saves 5 more units, even though both assign 7 donations. The other two unassigned donations fail no matter what order you use: D009 needs 50 units and no Center Wing volunteer has a big enough car, and D010 doesn't have any volunteer on shift in time.
 
 ## Fairness and Starvation
-Greedy urgency-first is not fair to long-lasting donations. In the comparison above, D004 was ready two hours before D007 and would have been rescued under FIFO, but greedy deferred it behind D007 and it lost its only possible recipient. Its explanation says so directly: *"It was deferred behind D007 under the urgency-first rule because D007 expires at 3:00 PM, before D004 expires at 1:00 AM the next day."* The `test_greedy_explains_deferred_donation` test checks this behavior.
+Greedy isn't fair to donations that last a long time. In our results, D004 was ready two hours before D007 and would have been picked up under FIFO, but greedy pushed it back and it lost its only possible recipient. The program explains this: *"It was deferred behind D007 under the urgency-first rule because D007 expires at 3:00 PM, before D004 expires at 1:00 AM the next day."* We test this in `test_greedy_explains_deferred_donation`.
 
-If urgent donations keep arriving, a donation with a long shelf life can be pushed back every time until all compatible capacity is gone, which is starvation. We accept this trade-off because a long-lasting donation can often be picked up later or by another organization, while an urgent one is lost if it is not handled now. Possible mitigations (not implemented) include reserving a share of capacity for older donations, or raising a donation's priority the longer it waits (aging).
+If urgent donations keep showing up, a long-lasting donation could get pushed back over and over until there's no room left anywhere. That's starvation. We decided this is an okay trade-off because losing urgent food is worse, but a couple of ways to fix it would be saving some capacity for older donations, or slowly raising a donation's priority the longer it waits (aging). We didn't implement either of these.
 
-## Limitations and Assumptions
-* **The whole day is planned at once.** Both strategies see every donation up front, including ones that become ready later. Greedy can therefore defer a donation that is ready at 8:00 AM behind one that is not ready until 1:00 PM; the 8:00 AM pickup time itself is unchanged. A real-time version would only consider donations that are already ready.
-* **Vehicle capacity is a total for the day**, not per trip: a volunteer with a 40-unit vehicle can carry 40 units across all of their pickups combined.
-* **No travel time or distance.** Pickup time is the later of the donation's ready time and the volunteer's shift start, and delivery is assumed to happen before the recipient closes. Matching requires all three parties to be in the same location.
-* **First feasible match, not best match.** Each donation takes the first recipient and volunteer pair that works, in input order, which can use up capacity another donation needed more. Neither strategy is globally optimal.
-* **Fixed categories.** Food types and locations must exactly match the known lists (case-sensitive).
-* **Simulated data only.** All sample data is invented for this project.
+## Limitations
+* **We plan the whole day at once.** Both strategies can see every donation from the start, even ones that won't be ready until later. So greedy can "defer" a donation that's ready at 8:00 AM behind one that isn't ready until 1:00 PM (the 8:00 AM pickup still happens at 8:00 AM though). A real system would only know about donations that are already ready.
+* **Vehicle capacity is for the whole day**, not per trip. A volunteer with a 40-unit car can only carry 40 units total across all their pickups.
+* **No travel time or distance.** The pickup time is just whichever is later, the donation being ready or the volunteer's shift starting. Everything has to be in the same location to match.
+* **First match, not best match.** Each donation takes the first recipient/volunteer pair that works, so neither strategy is guaranteed to be optimal.
+* **Food types and locations have to match exactly**, including capitalization.
+* **All the data is made up.**
 
 ## Automated Testing
 RescueRoute uses Python's built-in unittest framework to verify the correctness and reliability of its scheduling functionality.
@@ -158,9 +160,9 @@ python -m unittest discover -s tests -v
 This command discovers and executes the available unit tests and displays their results.
 
 ## References
-* Python standard library documentation (https://docs.python.org/3/library/): `heapq`, `collections.deque`, `dataclasses`, `json`, `unittest`, `tempfile`.
-* CPSC 335 RescueRoute Group Project Brief (project requirements and example greedy rule).
-* No external libraries, datasets, or third-party code were used.
+* Python documentation (https://docs.python.org/3/library/) for `heapq`, `collections.deque`, `dataclasses`, `json`, `unittest`, and `tempfile`
+* The CPSC 335 RescueRoute project brief
+* We didn't use any outside libraries, datasets, or code.
 
 ## Team Contributions
 * [Kihyun Won] (Data & Matching Lead): 
@@ -177,20 +179,18 @@ This command discovers and executes the available unit tests and displays their 
    - Assisted with debugging and verifying expected program behavior.
 
 * [Ethan Akahoshi] (Algorithm & Optimization Lead):
-   - Set up the GitHub repository and the initial donation and pickup-time logic (`deadline_of` and the original pickup-time check).
+   - Set up the GitHub repo and wrote the first donation and pickup-time functions (`deadline_of` and the original pickup-time check).
 
-   - Implemented the FIFO baseline scheduler with explainable assignment and rejection messages, and connected it to the input data in `main.py`.
+   - Wrote the FIFO scheduler and its explanations for assigned and unassigned donations, and hooked it up to the input data in `main.py`.
 
-   - Implemented the greedy urgency-first scheduler (`heapq` priority queue keyed on expiry deadline, quantity, and ready time), sharing FIFO's matching step so the two strategies differ only in processing order.
+   - Wrote the greedy urgency-first scheduler using `heapq`, and made it share FIFO's matching step so the only difference is the order.
 
-   - Added deferral explanations showing which donation went ahead under the greedy rule and why.
+   - Added the "deferred behind" explanations so you can see which donation went ahead and why.
 
-   - Wrote the greedy unit tests (priority ordering, FIFO vs. greedy producing different results, deferral/starvation, input not modified, empty input).
+   - Wrote the greedy tests (ordering, FIFO vs. greedy giving different results, deferral, not changing the input, empty input).
 
-   - Documented the greedy rule, its trade-offs, and the complexity analysis in this README.
+   - Added the metrics and the FIFO vs. greedy comparison.
 
-   - Added the metrics module (urgent rescue rate, capacity utilization, quantity rescued / at risk) and the FIFO vs. greedy comparison table and explanation.
+   - Added validation for the input values and fixed the crash on blank or broken JSON files.
 
-   - Added value validation for donations, recipients, and volunteers, and fixed the loader crash on blank or malformed JSON files.
-
-   - Updated the sample data to include a FIFO vs. greedy competition case, and expanded this README (setup, architecture, data model, metrics, comparison results, fairness, limitations, references).
+   - Changed the sample data so FIFO and greedy actually give different results, and wrote most of this README.
