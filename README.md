@@ -13,7 +13,7 @@ Before the scheduler prioritizes a donation, the system evaluates feasibility us
    * "expire_time" is calculated relative to the ready time. (ex: expire time of 60 with ready time of 60 means ready at 1:00 AM and expires at 2:00 AM)
 
 ## Scheduling Strategies
-Both strategies live in `Algo.py` and use the same matching step (first recipient that accepts the food, has room and is open; first volunteer with vehicle room, pickups left, and on shift before the food expires). They only differ in the **order** donations are handled, so the comparison is fair.
+Both strategies live in `Algo.py` and use the same matching step: for each donation they take the first recipient and volunteer pair that passes `check_compatibility` and `check_capacity` from `RescueRouter_Data.py`, using the remaining capacity and pickup counts at that moment. They only differ in the **order** donations are handled, so the comparison is fair.
 
 ### A. FIFO baseline (`fifo_schedule`)
 Donations are handled in arrival order (earliest `ready_time` first) using a `deque`.
@@ -53,7 +53,7 @@ This command discovers and executes the available unit tests and displays their 
    - Assisted with debugging and verifying expected program behavior.
 
 * [Ethan Akahoshi] (Algorithm & Optimization Lead):
-   - Set up the GitHub repository and the initial donation and pickup-time logic (`deadline_of`, `check_time`).
+   - Set up the GitHub repository and the initial donation and pickup-time logic (`deadline_of` and the original pickup-time check).
 
    - Implemented the FIFO baseline scheduler with explainable assignment and rejection messages, and connected it to the input data in `main.py`.
 

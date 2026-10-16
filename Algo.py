@@ -9,25 +9,14 @@
 def deadline_of(donation):
     return donation["ready_time"] + donation["expire_time"]
 
-def check_time(donation, recipient, volunteer):
-    deadline = deadline_of(donation)
-    vol_start, vol_end = volunteer["availability"]
-    pickup_time = max(donation["ready_time"], vol_start)
-
-    if pickup_time > deadline:
-        return False, f"it expires at {deadline}, before the pick up time of {pickup_time}"
-    if pickup_time > vol_end:
-        return False, f"The voulteer shift ends at {vol_end}"
-    if pickup_time > recipient["closing_time"]:
-        return False, f"{recipient['organization_name']}, closes at {recipient['closing_time']} "
-    return True, pickup_time
-
 # FIFO baseline
 
 import heapq
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
+
+from RescueRouter_Data import check_compatibility, check_capacity
 
 
 @dataclass
@@ -54,10 +43,9 @@ def fifo_schedule(donations, recipients, volunteers):
 
     We go through the donations in the order they're ready (earliest first).
 
-    For each donation:
-    - pick the first recipient that takes that food, has room, and is still open
-    - pick the first volunteer who has room in their car, isn't at their pickup
-      limit, and can get there before the food goes bad
+    For each donation, pick the first recipient and volunteer pair that passes
+    check_compatibility (food type, same location, pickup limit, time windows) and
+    check_capacity (recipient room, vehicle room) from RescueRouter_Data.
 
     It doesn't plan ahead, so sometimes an early donation takes a spot a later one
     needed more. Greedy is supposed to fix that.
@@ -66,9 +54,10 @@ def fifo_schedule(donations, recipients, volunteers):
 
     Returns a list with one Assignment for every donation.
 
-    Time: O(D log D + D * (R + V))
+    Time: O(D log D + D * R * V)
     D = donations, R = recipients, V = volunteers.
-    The D log D is from sorting, and the rest is checking the lists for each donation.
+    The D log D is from sorting, and the rest is trying every recipient / volunteer
+    pair for each donation.
     """
     donation_list = list(donations.values()) if isinstance(donations, dict) else list(donations)
     recipient_list = list(recipients.values()) if isinstance(recipients, dict) else list(recipients)
@@ -76,7 +65,6 @@ def fifo_schedule(donations, recipients, volunteers):
 
     # Local copies of everything FIFO changes, so the input data stays untouched
     rec_capacity = {r["recipient_id"]: r["capacity"] for r in recipient_list}
-    rec_accepts = {r["recipient_id"]: set(r["accepted_food_types"]) for r in recipient_list}
     vol_capacity = {v["volunteer_id"]: v["vehicle_capacity"] for v in volunteer_list}
     vol_pickups = {v["volunteer_id"]: v["pickup_counter"] for v in volunteer_list}
 
@@ -85,7 +73,7 @@ def fifo_schedule(donations, recipients, volunteers):
     while queue:
         donation = queue.popleft()
         results.append(_assign_one(donation, recipient_list, volunteer_list,
-                                   rec_capacity, rec_accepts, vol_capacity, vol_pickups))
+                                   rec_capacity, vol_capacity, vol_pickups))
     return results
 
 
@@ -120,8 +108,9 @@ def greedy_schedule(donations, recipients, volunteers):
     expire_time). If two expire at the same time, handle the larger quantity first.
     If still tied, the one that was ready earlier goes first.
 
-    Each donation is then matched exactly like FIFO (first recipient / volunteer that
-    works), so the only difference between the two strategies is the order.
+    Each donation is then matched exactly like FIFO (first recipient / volunteer pair
+    that passes check_compatibility and check_capacity), so the only difference
+    between the two strategies is the order.
 
     What it optimizes locally: the food closest to going bad gets first pick of the
     recipient capacity and volunteers, instead of losing it to food that could wait.
@@ -135,7 +124,7 @@ def greedy_schedule(donations, recipients, volunteers):
 
     Returns a list with one Assignment for every donation, in the order handled.
 
-    Time: O(D log D + D * (R + V))
+    Time: O(D log D + D * R * V)
     D log D is building / popping the heap, the rest is matching each donation.
     """
     donation_list = list(donations.values()) if isinstance(donations, dict) else list(donations)
@@ -143,7 +132,6 @@ def greedy_schedule(donations, recipients, volunteers):
     volunteer_list = list(volunteers.values()) if isinstance(volunteers, dict) else list(volunteers)
 
     rec_capacity = {r["recipient_id"]: r["capacity"] for r in recipient_list}
-    rec_accepts = {r["recipient_id"]: set(r["accepted_food_types"]) for r in recipient_list}
     vol_capacity = {v["volunteer_id"]: v["vehicle_capacity"] for v in volunteer_list}
     vol_pickups = {v["volunteer_id"]: v["pickup_counter"] for v in volunteer_list}
 
@@ -159,7 +147,7 @@ def greedy_schedule(donations, recipients, volunteers):
         _, i = heapq.heappop(heap)
         donation = arrived[i]
         assignment = _assign_one(donation, recipient_list, volunteer_list,
-                                 rec_capacity, rec_accepts, vol_capacity, vol_pickups)
+                                 rec_capacity, vol_capacity, vol_pickups)
 
         # If something that arrived after this donation was already handled, it got deferred
         if latest > i:
@@ -171,87 +159,76 @@ def greedy_schedule(donations, recipients, volunteers):
     return results
 
 
-def _assign_one(donation, recipients, volunteers,
-                rec_capacity, rec_accepts, vol_capacity, vol_pickups):
-    # Finds the first feasible (recipient, volunteer) pair for one donation in O(R + V)
-    # and updates the capacity / pickup state on success. Shared by FIFO and greedy.
+def _assign_one(donation, recipients, volunteers, rec_capacity, vol_capacity, vol_pickups):
+    # Finds the first (recipient, volunteer) pair that passes check_compatibility and
+    # check_capacity, in O(R * V), and updates the capacity / pickup state on success.
+    # Shared by FIFO and greedy.
     d_id = donation["donation_id"]
     food = donation["food_type"]
     qty = donation["quantity"]
+    loc = donation["location"]
     deadline = deadline_of(donation)
 
+    # The checks read capacity / pickup_counter straight off the dicts, so give them
+    # copies holding what's left right now instead of the starting values
+    current_recipients = [dict(r, capacity=rec_capacity[r["recipient_id"]]) for r in recipients]
+    current_volunteers = [dict(v, vehicle_capacity=vol_capacity[v["volunteer_id"]],
+                               pickup_counter=vol_pickups[v["volunteer_id"]])
+                          for v in volunteers]
+
+    for recipient in current_recipients:
+        for volunteer in current_volunteers:
+            if (check_compatibility(donation, recipient, volunteer)
+                    and check_capacity(donation, recipient, volunteer)):
+                return _assigned(donation, recipient, volunteer,
+                                 rec_capacity, vol_capacity, vol_pickups)
+
+    # No pair passed. Narrow down the candidates the same way the checks do to explain why.
     def unassigned(why):
         return Assignment(d_id, None, None, None,
                           f"Donation {d_id} could not be assigned because {why}.", "unassigned")
 
-    # Recipients that accept this food type and still have room, in input order
-    accepting = [r for r in recipients if food in rec_accepts[r["recipient_id"]]]
+    accepting = [r for r in current_recipients if food in r["accepted_food_types"]]
     if not accepting:
         return unassigned(f"no recipient accepts {food}")
-    with_room = [r for r in accepting if rec_capacity[r["recipient_id"]] >= qty]
+    nearby = [r for r in accepting if r["location"] == loc]
+    if not nearby:
+        return unassigned(f"no recipient in {loc} accepts {food}")
+    with_room = [r for r in nearby if r["capacity"] >= qty]
     if not with_room:
-        return unassigned(f"no recipient that accepts {food} had {qty} units of remaining capacity")
+        return unassigned(f"no recipient in {loc} that accepts {food} had {qty} units "
+                          f"of remaining capacity")
 
-    # Volunteers who can do the pickup at all. Pickup time depends only on the volunteer
-    # (max of ready time and shift start), so it's computed once here.
-    eligible = []
-    can_carry = maxed_out = too_late = off_shift = 0
-    for v in volunteers:
-        v_id = v["volunteer_id"]
-        if vol_capacity[v_id] < qty:
-            continue
-        can_carry += 1
-        if vol_pickups[v_id] >= v["maximum_pickups"]:
-            maxed_out += 1
-            continue
-        start, end = v["availability"]
-        pickup = max(donation["ready_time"], start)
-        if pickup > deadline:
-            too_late += 1
-        elif pickup > end:
-            off_shift += 1
-        else:
-            eligible.append(v)
+    local = [v for v in current_volunteers if v["location"] == loc]
+    if not local:
+        return unassigned(f"no volunteer is based in {loc}")
+    can_carry = [v for v in local if v["vehicle_capacity"] >= qty]
+    if not can_carry:
+        return unassigned(f"no volunteer in {loc} had {qty} units of remaining vehicle capacity")
+    free = [v for v in can_carry if v["pickup_counter"] < v["maximum_pickups"]]
+    if not free:
+        return unassigned(f"every volunteer in {loc} who could carry it had already reached "
+                          f"their maximum pickups")
+    return unassigned(f"no volunteer who could carry it was on shift after it was ready at "
+                      f"{_fmt_time(donation['ready_time'])} and before it expires at "
+                      f"{_fmt_time(deadline)}, while a recipient with room was still open")
 
-    if not eligible:
-        if can_carry == 0:
-            why = f"no volunteer had {qty} units of remaining vehicle capacity"
-        elif maxed_out == can_carry:
-            why = "every volunteer who could carry it had already reached their maximum pickups"
-        elif off_shift == 0:
-            why = (f"it expires at {_fmt_time(deadline)}, before any volunteer who could "
-                   f"carry it was available")
-        elif too_late == 0:
-            why = (f"no volunteer who could carry it was still on shift when it was ready "
-                   f"at {_fmt_time(donation['ready_time'])}")
-        else:
-            why = (f"no volunteer who could carry it was on shift between its ready time "
-                   f"({_fmt_time(donation['ready_time'])}) and expiry ({_fmt_time(deadline)})")
-        return unassigned(why)
 
-    # A recipient can be paired with some volunteer iff it is still open at the earliest
-    # possible pickup, so this picks the first recipient that has any feasible volunteer
-    earliest = min(max(donation["ready_time"], v["availability"][0]) for v in eligible)
-    recipient = next((r for r in with_room if r["closing_time"] >= earliest), None)
-    if recipient is None:
-        return unassigned(f"every recipient that accepts {food} and had room closes before "
-                          f"the earliest possible pickup at {_fmt_time(earliest)}")
-
-    # At least one eligible volunteer reaches this recipient in time (the one giving `earliest`)
-    for volunteer in eligible:
-        ok, pickup = check_time(donation, recipient, volunteer)
-        if ok:
-            break
-
+def _assigned(donation, recipient, volunteer, rec_capacity, vol_capacity, vol_pickups):
+    # Records a successful match and returns its explanation
+    d_id = donation["donation_id"]
+    qty = donation["quantity"]
     r_id = recipient["recipient_id"]
     v_id = volunteer["volunteer_id"]
     rec_capacity[r_id] -= qty
     vol_capacity[v_id] -= qty
     vol_pickups[v_id] += 1
 
+    pickup = max(donation["ready_time"], volunteer["availability"][0])
     name = recipient["organization_name"]
     reason = (f"Donation {d_id} was assigned to {name} with volunteer {v_id} for pickup at "
-              f"{_fmt_time(pickup)} because {name} accepts {food}, had capacity for {qty} units, "
-              f"and is open until {_fmt_time(recipient['closing_time'])}, and {v_id} can carry "
-              f"the quantity before the donation expires at {_fmt_time(deadline)}.")
+              f"{_fmt_time(pickup)} because {name} accepts {donation['food_type']}, had "
+              f"capacity for {qty} units, and is open until "
+              f"{_fmt_time(recipient['closing_time'])}, and {v_id} can carry the quantity "
+              f"before the donation expires at {_fmt_time(deadline_of(donation))}.")
     return Assignment(d_id, r_id, v_id, pickup, reason, "assigned")
